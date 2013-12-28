@@ -15,7 +15,8 @@
         
         <activity
             android:name="com.lunarsong.android.NativeActivity"
-            android:label="@string/app_name" >
+            android:label="@string/app_name" 
+            android:configChanges="keyboardHidden|keyboard|orientation|screenSize" >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 

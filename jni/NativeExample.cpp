@@ -12,31 +12,75 @@ extern "C"
 }
 
 bool InitGL();
-void destroy();
+void DestroyOpenGL();
 
 bool bIsVisible = false;
+bool bShouldQuit = false;
 void callback( const AndroidMessage& message )
 {
-	LOGE( "NEW Message!! Whoohoo %i", message.iMessageID );
-
-	if ( message.iMessageID == SurfaceCreated )
+	if ( message.iMessageID == AndroidMessage_ApplicationShutdown )
 	{
+		// Shutdown the app
+		bShouldQuit = true;
+	}
+
+	else if ( message.iMessageID == AndroidMessage_SurfaceCreated )
+	{
+		// Surface created, init OpenGL
 		InitGL();
 	}
 
-	else if ( message.iMessageID == SurfaceDestroyed )
+	else if ( message.iMessageID == AndroidMessage_SurfaceDestroyed )
 	{
-		destroy();
+		// Surface destroyed, destroy OpenGL
+		DestroyOpenGL();
 	}
 
-	else if ( message.iMessageID == WindowVisible )
+	else if ( message.iMessageID == AndroidMessage_SurfaceChanged )
 	{
+		// Surface format and size may have changed.
+		AndroidSurfaceChanged* pSurface;
+		pSurface = (AndroidSurfaceChanged*)message.pData;
+
+		// Set new viewport
+		glViewport( 0, 0, pSurface->iWidth, pSurface->iHeight );
+	}
+
+	else if ( message.iMessageID == AndroidMessage_WindowVisible )
+	{
+		// We should now draw!
 		bIsVisible = true;
 	}
 
-	else if ( message.iMessageID == WindowHidden )
+	else if ( message.iMessageID == AndroidMessage_WindowHidden )
 	{
+		// We shouldn't draw now...
 		bIsVisible = false;
+	}
+
+	else if ( message.iMessageID == AndroidMessage_OnTouch )
+	{
+		// It touched me... eek!
+		AndroidTouch* pTouch = (AndroidTouch*)message.pData;
+
+		LOGV( "[Example]: Touch: %i, x: %f y:, %f action:, %i.", pTouch->iPointerID, pTouch->fPosX, pTouch->fPosY, pTouch->iAction );
+
+		if ( pTouch->iAction == 0 )
+		{
+			NativeActivity::ShowKeyboard();
+		}
+
+		else if ( pTouch->iAction == 1 )
+		{
+			NativeActivity::HideKeyboard();
+		}
+	}
+
+	else if ( message.iMessageID == AndroidMessage_OnKey )
+	{
+		// We have been pressed!
+		AndroidKey* pKey = (AndroidKey*)message.pData;
+		LOGV( "[Example]: Got key! %i %c", pKey->iKeyCode, pKey->iUnicodeChar );
 	}
 }
 
@@ -46,36 +90,39 @@ EGLContext _context;
 bool bOpenGLInit = false;
 void android_main()
 {
-	LOGE( "Hiiiiiiiii!" );
+	LOGV( "[Example]: android_main() called!" );
 
+	// Set callback functions for events
 	NativeActivity::SetEventCallback( callback );
 
-	while ( true )
+	// While app is alive...
+	while ( !bShouldQuit )
 	{
+		// Poll events
 		NativeActivity::PollEvents();
 
+		// If we have OpenGL setup and the window is visible
 		if ( bOpenGLInit && bIsVisible )
 		{
-			if (_display)
-			{
-				glClearColor( 1.0f, 0.0f, 0.0f, 1.0f );
-				glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+			// Draw
 
-				if (!eglSwapBuffers(_display, _surface))
-				{
+			glClearColor( 1.0f, 0.0f, 0.0f, 1.0f );
+			glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+
+			if ( !eglSwapBuffers(_display, _surface ))
+			{
 					LOGE("eglSwapBuffers() returned error %d", eglGetError());
-				}
 			}
 		}
-
-		sleep( 1 );
 	}
 }
 
-void destroy()
+void DestroyOpenGL()
 {
-	LOGE( "Destroying context!" );
+	LOGV( "Destroying context!" );
+
 	bOpenGLInit = false;
+
 	eglMakeCurrent(_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
 	    eglDestroyContext(_display, _context);
 	    eglDestroySurface(_display, _surface);
@@ -108,52 +155,61 @@ bool InitGL()
 
 	    LOGV( "Initializing context" );
 
-	    if ((display = eglGetDisplay(EGL_DEFAULT_DISPLAY)) == EGL_NO_DISPLAY) {
+	    if ( (display = eglGetDisplay(EGL_DEFAULT_DISPLAY)) == EGL_NO_DISPLAY )
+	    {
 	        LOGE("eglGetDisplay() returned error %d", eglGetError());
 	        return false;
 	    }
-	    if (!eglInitialize(display, 0, 0)) {
+
+	    if ( !eglInitialize(display, 0, 0) )
+	    {
 	    	LOGE("eglInitialize() returned error %d", eglGetError());
 	        return false;
 	    }
 
-	    if (!eglChooseConfig(display, attribs, &config, 1, &numConfigs)) {
+	    if ( !eglChooseConfig(display, attribs, &config, 1, &numConfigs) )
+	    {
 	    	LOGE("eglChooseConfig() returned error %d", eglGetError());
-	        destroy();
+	    	DestroyOpenGL();
 	        return false;
 	    }
 
-	    if (!eglGetConfigAttrib(display, config, EGL_NATIVE_VISUAL_ID, &format)) {
+	    if ( !eglGetConfigAttrib(display, config, EGL_NATIVE_VISUAL_ID, &format) )
+	    {
 	    	LOGE("eglGetConfigAttrib() returned error %d", eglGetError());
-	        destroy();
+	    	DestroyOpenGL();
 	        return false;
 	    }
 
+	    // Android, set buffer geometry using our window which is saved in NativeActivity
 	    ANativeWindow_setBuffersGeometry( NativeActivity::GetWindow(), 0, 0, format );
 
 	    if (!(surface = eglCreateWindowSurface(display, config, NativeActivity::GetWindow(), 0)))
 	    {
 	    	LOGE("eglCreateWindowSurface() returned error %d", eglGetError());
-	        destroy();
+	    	DestroyOpenGL();
 	        return false;
 	    }
 
-	    if (!(context = eglCreateContext(display, config, 0, 0))) {
+	    if ( !(context = eglCreateContext(display, config, 0, 0)) )
+	    {
 	    	LOGE("eglCreateContext() returned error %d", eglGetError());
-	        destroy();
+	    	DestroyOpenGL();
 	        return false;
 	    }
 
-	    if (!eglMakeCurrent(display, surface, surface, context)) {
+	    if ( !eglMakeCurrent(display, surface, surface, context) )
+	    {
 	    	LOGE("eglMakeCurrent() returned error %d", eglGetError());
-	        destroy();
+	    	DestroyOpenGL();
 	        return false;
 	    }
 
-	    if (!eglQuerySurface(display, surface, EGL_WIDTH, &width) ||
-	        !eglQuerySurface(display, surface, EGL_HEIGHT, &height)) {
+	    if ( !eglQuerySurface(display, surface, EGL_WIDTH, &width) ||
+	        !eglQuerySurface(display, surface, EGL_HEIGHT, &height) )
+	    {
 	    	LOGE("eglQuerySurface() returned error %d", eglGetError());
-	        destroy();
+	    	DestroyOpenGL();
 	        return false;
 	    }
 
