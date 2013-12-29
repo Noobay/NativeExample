@@ -1,5 +1,5 @@
 #include <AndroidLog.h>
-#include <NativeActivity.h>
+#include <Android.h>
 #include <unistd.h>
 #include "AndroidMessage.h"
 
@@ -67,12 +67,12 @@ void callback( const AndroidMessage& message )
 
 		if ( pTouch->iAction == 0 )
 		{
-			NativeActivity::ShowKeyboard();
+			Android::ShowKeyboard();
 		}
 
 		else if ( pTouch->iAction == 1 )
 		{
-			NativeActivity::HideKeyboard();
+			Android::HideKeyboard();
 		}
 	}
 
@@ -93,13 +93,13 @@ void android_main()
 	LOGV( "[Example]: android_main() called!" );
 
 	// Set callback functions for events
-	NativeActivity::SetEventCallback( callback );
+	Android::SetEventCallback( callback );
 
 	// While app is alive...
 	while ( !bShouldQuit )
 	{
 		// Poll events
-		NativeActivity::PollEvents();
+		Android::PollEvents();
 
 		// If we have OpenGL setup and the window is visible
 		if ( bOpenGLInit && bIsVisible )
@@ -181,10 +181,10 @@ bool InitGL()
 	        return false;
 	    }
 
-	    // Android, set buffer geometry using our window which is saved in NativeActivity
-	    ANativeWindow_setBuffersGeometry( NativeActivity::GetWindow(), 0, 0, format );
+	    // Android, set buffer geometry using our window which is saved in Android
+	    ANativeWindow_setBuffersGeometry( Android::GetWindow(), 0, 0, format );
 
-	    if (!(surface = eglCreateWindowSurface(display, config, NativeActivity::GetWindow(), 0)))
+	    if (!(surface = eglCreateWindowSurface(display, config, Android::GetWindow(), 0)))
 	    {
 	    	LOGE("eglCreateWindowSurface() returned error %d", eglGetError());
 	    	DestroyOpenGL();
